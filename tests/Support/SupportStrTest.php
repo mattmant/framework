@@ -106,6 +106,19 @@ class SupportStrTest extends TestCase
         $this->assertSame('han', Str::before('han2nah', 2));
     }
 
+    public function testStrBeforeLast()
+    {
+        $this->assertSame('yve', Str::beforeLast('yvette', 'tte'));
+        $this->assertSame('yvet', Str::beforeLast('yvette', 't'));
+        $this->assertSame('ééé ', Str::beforeLast('ééé yvette', 'yve'));
+        $this->assertSame('', Str::beforeLast('yvette', 'yve'));
+        $this->assertSame('yvette', Str::beforeLast('yvette', 'xxxx'));
+        $this->assertSame('yvette', Str::beforeLast('yvette', ''));
+        $this->assertSame('yv0et', Str::beforeLast('yv0et0te', '0'));
+        $this->assertSame('yv0et', Str::beforeLast('yv0et0te', 0));
+        $this->assertSame('yv2et', Str::beforeLast('yv2et2te', 2));
+    }
+
     public function testStrAfter()
     {
         $this->assertSame('nah', Str::after('hannah', 'han'));
@@ -116,6 +129,19 @@ class SupportStrTest extends TestCase
         $this->assertSame('nah', Str::after('han0nah', '0'));
         $this->assertSame('nah', Str::after('han0nah', 0));
         $this->assertSame('nah', Str::after('han2nah', 2));
+    }
+
+    public function testStrAfterLast()
+    {
+        $this->assertSame('tte', Str::afterLast('yvette', 'yve'));
+        $this->assertSame('e', Str::afterLast('yvette', 't'));
+        $this->assertSame('e', Str::afterLast('ééé yvette', 't'));
+        $this->assertSame('', Str::afterLast('yvette', 'tte'));
+        $this->assertSame('yvette', Str::afterLast('yvette', 'xxxx'));
+        $this->assertSame('yvette', Str::afterLast('yvette', ''));
+        $this->assertSame('te', Str::afterLast('yv0et0te', '0'));
+        $this->assertSame('te', Str::afterLast('yv0et0te', 0));
+        $this->assertSame('te', Str::afterLast('yv2et2te', 2));
     }
 
     public function testStrContains()
@@ -298,6 +324,11 @@ class SupportStrTest extends TestCase
         $this->assertSame('laravel_php_framework_', Str::snake('LaravelPhpFramework_', '_'));
         $this->assertSame('laravel_php_framework', Str::snake('laravel php Framework'));
         $this->assertSame('laravel_php_frame_work', Str::snake('laravel php FrameWork'));
+        // prevent breaking changes
+        $this->assertSame('foo-bar', Str::snake('foo-bar'));
+        $this->assertSame('foo-_bar', Str::snake('Foo-Bar'));
+        $this->assertSame('foo__bar', Str::snake('Foo_Bar'));
+        $this->assertSame('żółtałódka', Str::snake('ŻółtaŁódka'));
     }
 
     public function testStudly()

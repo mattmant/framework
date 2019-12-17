@@ -56,6 +56,42 @@ class FoundationTestResponseTest extends TestCase
         $response->assertViewHas('foo', $model);
     }
 
+    public function testAssertViewHasWithClosure()
+    {
+        $response = $this->makeMockResponse([
+            'render' => 'hello world',
+            'gatherData' => ['foo' => 'bar'],
+        ]);
+
+        $response->assertViewHas('foo', function ($value) {
+            return $value === 'bar';
+        });
+    }
+
+    public function testAssertViewHasWithValue()
+    {
+        $response = $this->makeMockResponse([
+            'render' => 'hello world',
+            'gatherData' => ['foo' => 'bar'],
+        ]);
+
+        $response->assertViewHas('foo', 'bar');
+    }
+
+    public function testAssertViewHasWithNestedValue()
+    {
+        $response = $this->makeMockResponse([
+            'render' => 'hello world',
+            'gatherData' => [
+                'foo' => [
+                    'nested' => 'bar',
+                ],
+            ],
+        ]);
+
+        $response->assertViewHas('foo.nested', 'bar');
+    }
+
     public function testAssertSeeInOrder()
     {
         $response = $this->makeMockResponse([
@@ -147,6 +183,22 @@ class FoundationTestResponseTest extends TestCase
         $response->assertOk();
     }
 
+    public function testAssertCreated()
+    {
+        $statusCode = 500;
+
+        $this->expectException(AssertionFailedError::class);
+
+        $this->expectExceptionMessage('Response status code ['.$statusCode.'] does not match expected 201 status code.');
+
+        $baseResponse = tap(new Response, function ($response) use ($statusCode) {
+            $response->setStatusCode($statusCode);
+        });
+
+        $response = TestResponse::fromBaseResponse($baseResponse);
+        $response->assertCreated();
+    }
+
     public function testAssertNotFound()
     {
         $statusCode = 500;
@@ -192,6 +244,54 @@ class FoundationTestResponseTest extends TestCase
 
         $response = TestResponse::fromBaseResponse($baseResponse);
         $response->assertUnauthorized();
+    }
+
+    public function testAssertNoContentAsserts204StatusCodeByDefault()
+    {
+        $statusCode = 500;
+
+        $this->expectException(AssertionFailedError::class);
+
+        $this->expectExceptionMessage("Expected status code 204 but received {$statusCode}");
+
+        $baseResponse = tap(new Response, function ($response) use ($statusCode) {
+            $response->setStatusCode($statusCode);
+        });
+
+        $response = TestResponse::fromBaseResponse($baseResponse);
+        $response->assertNoContent();
+    }
+
+    public function testAssertNoContentAssertsExpectedStatusCode()
+    {
+        $statusCode = 500;
+        $expectedStatusCode = 418;
+
+        $this->expectException(AssertionFailedError::class);
+
+        $this->expectExceptionMessage("Expected status code {$expectedStatusCode} but received {$statusCode}");
+
+        $baseResponse = tap(new Response, function ($response) use ($statusCode) {
+            $response->setStatusCode($statusCode);
+        });
+
+        $response = TestResponse::fromBaseResponse($baseResponse);
+        $response->assertNoContent($expectedStatusCode);
+    }
+
+    public function testAssertNoContentAssertsEmptyContent()
+    {
+        $this->expectException(AssertionFailedError::class);
+
+        $this->expectExceptionMessage('Response content is not empty');
+
+        $baseResponse = tap(new Response, function ($response) {
+            $response->setStatusCode(204);
+            $response->setContent('non-empty-response-content');
+        });
+
+        $response = TestResponse::fromBaseResponse($baseResponse);
+        $response->assertNoContent();
     }
 
     public function testAssertStatus()
@@ -299,6 +399,25 @@ class FoundationTestResponseTest extends TestCase
         $response->assertJsonPath('0.id', 10);
         $response->assertJsonPath('1.id', 20);
         $response->assertJsonPath('2.id', 30);
+    }
+
+    public function testAssertJsonPathStrict()
+    {
+        $response = TestResponse::fromBaseResponse(new Response(new JsonSerializableSingleResourceWithIntegersStub));
+
+        $response->assertJsonPath('0.id', 10, true);
+        $response->assertJsonPath('1.id', 20, true);
+        $response->assertJsonPath('2.id', 30, true);
+    }
+
+    public function testAssertJsonPathStrictCanFail()
+    {
+        $this->expectException(AssertionFailedError::class);
+        $this->expectExceptionMessage('Failed asserting that 10 is identical to \'10\'.');
+
+        $response = TestResponse::fromBaseResponse(new Response(new JsonSerializableSingleResourceWithIntegersStub));
+
+        $response->assertJsonPath('0.id', '10', true);
     }
 
     public function testAssertJsonFragment()

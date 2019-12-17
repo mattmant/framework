@@ -5,9 +5,13 @@ namespace Illuminate\Tests\Validation;
 use DateTime;
 use DateTimeImmutable;
 use Illuminate\Container\Container;
+use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Contracts\Auth\Guard;
+use Illuminate\Contracts\Hashing\Hasher;
 use Illuminate\Contracts\Translation\Translator as TranslatorContract;
 use Illuminate\Contracts\Validation\ImplicitRule;
 use Illuminate\Contracts\Validation\Rule;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Translation\ArrayLoader;
@@ -684,6 +688,100 @@ class ValidationValidatorTest extends TestCase
         $v = new Validator($trans, [], ['name' => 'present|string']);
         $v->passes();
         $this->assertEquals(['validation.present'], $v->errors()->get('name'));
+    }
+
+    public function testValidatePassword()
+    {
+        // Fails when user is not logged in.
+        $auth = m::mock(Guard::class);
+        $auth->shouldReceive('guard')->andReturn($auth);
+        $auth->shouldReceive('guest')->andReturn(true);
+
+        $hasher = m::mock(Hasher::class);
+
+        $container = m::mock(Container::class);
+        $container->shouldReceive('make')->with('auth')->andReturn($auth);
+        $container->shouldReceive('make')->with('hash')->andReturn($hasher);
+
+        $trans = $this->getTranslator();
+        $trans->shouldReceive('get');
+
+        $v = new Validator($trans, ['password' => 'foo'], ['password' => 'password']);
+        $v->setContainer($container);
+
+        $this->assertFalse($v->passes());
+
+        // Fails when password is incorrect.
+        $user = m::mock(Authenticatable::class);
+        $user->shouldReceive('getAuthPassword');
+
+        $auth = m::mock(Guard::class);
+        $auth->shouldReceive('guard')->andReturn($auth);
+        $auth->shouldReceive('guest')->andReturn(false);
+        $auth->shouldReceive('user')->andReturn($user);
+
+        $hasher = m::mock(Hasher::class);
+        $hasher->shouldReceive('check')->andReturn(false);
+
+        $container = m::mock(Container::class);
+        $container->shouldReceive('make')->with('auth')->andReturn($auth);
+        $container->shouldReceive('make')->with('hash')->andReturn($hasher);
+
+        $trans = $this->getTranslator();
+        $trans->shouldReceive('get');
+
+        $v = new Validator($trans, ['password' => 'foo'], ['password' => 'password']);
+        $v->setContainer($container);
+
+        $this->assertFalse($v->passes());
+
+        // Succeeds when password is correct.
+        $user = m::mock(Authenticatable::class);
+        $user->shouldReceive('getAuthPassword');
+
+        $auth = m::mock(Guard::class);
+        $auth->shouldReceive('guard')->andReturn($auth);
+        $auth->shouldReceive('guest')->andReturn(false);
+        $auth->shouldReceive('user')->andReturn($user);
+
+        $hasher = m::mock(Hasher::class);
+        $hasher->shouldReceive('check')->andReturn(true);
+
+        $container = m::mock(Container::class);
+        $container->shouldReceive('make')->with('auth')->andReturn($auth);
+        $container->shouldReceive('make')->with('hash')->andReturn($hasher);
+
+        $trans = $this->getTranslator();
+        $trans->shouldReceive('get');
+
+        $v = new Validator($trans, ['password' => 'foo'], ['password' => 'password']);
+        $v->setContainer($container);
+
+        $this->assertTrue($v->passes());
+
+        // We can use a specific guard.
+        $user = m::mock(Authenticatable::class);
+        $user->shouldReceive('getAuthPassword');
+
+        $auth = m::mock(Guard::class);
+        $auth->shouldReceive('guard')->with('custom')->andReturn($auth);
+        $auth->shouldReceive('guest')->andReturn(false);
+        $auth->shouldReceive('user')->andReturn($user);
+
+        $hasher = m::mock(Hasher::class);
+        $hasher->shouldReceive('check')->andReturn(true);
+
+        $container = m::mock(Container::class);
+        $container->shouldReceive('make')->with('auth')->andReturn($auth);
+        $container->shouldReceive('make')->with('hash')->andReturn($hasher);
+
+        $trans = $this->getTranslator();
+        $trans->shouldReceive('get');
+
+        $v = new Validator($trans, ['password' => 'foo'], ['password' => 'password:custom']);
+        $v->setContainer($container);
+
+        $this->assertTrue($v->passes());
     }
 
     public function testValidatePresent()
@@ -2463,6 +2561,7 @@ class ValidationValidatorTest extends TestCase
             ['http://local.dev'],
             ['http://google.com'],
             ['http://www.google.com'],
+            ['http://goog_le.com'],
             ['https://google.com'],
             ['http://illuminate.dev'],
             ['http://localhost'],
@@ -2487,7 +2586,6 @@ class ValidationValidatorTest extends TestCase
             ['://google.com'],
             ['http ://google.com'],
             ['http:/google.com'],
-            ['http://goog_le.com'],
             ['http://google.com::aa'],
             ['http://google.com:aa'],
             ['http://127.0.0.1:aa'],
@@ -2650,17 +2748,30 @@ class ValidationValidatorTest extends TestCase
         $v = new Validator($trans, ['x' => $uploadedFile], ['x' => 'dimensions:ratio=2/3']);
         $this->assertTrue($v->passes());
 
-        // Ensure svg images always pass as size is irreleveant
-        $uploadedFile = new UploadedFile(__DIR__.'/fixtures/image.svg', '', 'image/svg+xml', null, null, true);
+        // Ensure svg images always pass as size is irreleveant (image/svg+xml)
+        $svgXmlUploadedFile = new UploadedFile(__DIR__.'/fixtures/image.svg', '', 'image/svg+xml', null, null, true);
         $trans = $this->getIlluminateArrayTranslator();
 
-        $v = new Validator($trans, ['x' => $uploadedFile], ['x' => 'dimensions:max_width=1,max_height=1']);
+        $v = new Validator($trans, ['x' => $svgXmlUploadedFile], ['x' => 'dimensions:max_width=1,max_height=1']);
         $this->assertTrue($v->passes());
 
-        $file = new File(__DIR__.'/fixtures/image.svg', '', 'image/svg+xml', null, null, true);
+        $svgXmlFile = new File(__DIR__.'/fixtures/image.svg', '', 'image/svg+xml', null, null, true);
         $trans = $this->getIlluminateArrayTranslator();
 
-        $v = new Validator($trans, ['x' => $file], ['x' => 'dimensions:max_width=1,max_height=1']);
+        $v = new Validator($trans, ['x' => $svgXmlFile], ['x' => 'dimensions:max_width=1,max_height=1']);
+        $this->assertTrue($v->passes());
+
+        // Ensure svg images always pass as size is irreleveant (image/svg)
+        $svgUploadedFile = new UploadedFile(__DIR__.'/fixtures/image2.svg', '', 'image/svg', null, null, true);
+        $trans = $this->getIlluminateArrayTranslator();
+
+        $v = new Validator($trans, ['x' => $svgUploadedFile], ['x' => 'dimensions:max_width=1,max_height=1']);
+        $this->assertTrue($v->passes());
+
+        $svgFile = new File(__DIR__.'/fixtures/image2.svg', '', 'image/svg', null, null, true);
+        $trans = $this->getIlluminateArrayTranslator();
+
+        $v = new Validator($trans, ['x' => $svgFile], ['x' => 'dimensions:max_width=1,max_height=1']);
         $this->assertTrue($v->passes());
     }
 
@@ -4183,6 +4294,44 @@ class ValidationValidatorTest extends TestCase
         $this->assertEquals(['cat' => ['cat1' => ['name' => '1']]], ValidationData::extractDataFromPath('cat.cat1.name', $data));
     }
 
+    public function testParsingTablesFromModels()
+    {
+        $trans = $this->getIlluminateArrayTranslator();
+        $v = new Validator($trans, [], []);
+
+        $implicit_no_connection = $v->parseTable(ImplicitTableModel::class);
+        $this->assertEquals(null, $implicit_no_connection[0]);
+        $this->assertEquals('implicit_table_models', $implicit_no_connection[1]);
+
+        $explicit_no_connection = $v->parseTable(ExplicitTableModel::class);
+        $this->assertEquals(null, $explicit_no_connection[0]);
+        $this->assertEquals('explicits', $explicit_no_connection[1]);
+
+        $noneloquent_no_connection = $v->parseTable(NonEloquentModel::class);
+        $this->assertEquals(null, $noneloquent_no_connection[0]);
+        $this->assertEquals(NonEloquentModel::class, $noneloquent_no_connection[1]);
+
+        $raw_no_connection = $v->parseTable('table');
+        $this->assertEquals(null, $raw_no_connection[0]);
+        $this->assertEquals('table', $raw_no_connection[1]);
+
+        $implicit_connection = $v->parseTable('connection.'.ImplicitTableModel::class);
+        $this->assertEquals('connection', $implicit_connection[0]);
+        $this->assertEquals('implicit_table_models', $implicit_connection[1]);
+
+        $explicit_connection = $v->parseTable('connection.'.ExplicitTableModel::class);
+        $this->assertEquals('connection', $explicit_connection[0]);
+        $this->assertEquals('explicits', $explicit_connection[1]);
+
+        $noneloquent_connection = $v->parseTable('connection.'.NonEloquentModel::class);
+        $this->assertEquals('connection', $noneloquent_connection[0]);
+        $this->assertEquals(NonEloquentModel::class, $noneloquent_connection[1]);
+
+        $raw_connection = $v->parseTable('connection.table');
+        $this->assertEquals('connection', $raw_connection[0]);
+        $this->assertEquals('table', $raw_connection[1]);
+    }
+
     public function testUsingSettersWithImplicitRules()
     {
         $trans = $this->getIlluminateArrayTranslator();
@@ -4644,4 +4793,21 @@ class ValidationValidatorTest extends TestCase
             new ArrayLoader, 'en'
         );
     }
+}
+
+class ImplicitTableModel extends Model
+{
+    protected $guarded = [];
+    public $timestamps = false;
+}
+
+class ExplicitTableModel extends Model
+{
+    protected $table = 'explicits';
+    protected $guarded = [];
+    public $timestamps = false;
+}
+
+class NonEloquentModel
+{
 }
