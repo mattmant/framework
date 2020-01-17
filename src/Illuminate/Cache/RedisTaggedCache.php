@@ -125,10 +125,7 @@ class RedisTaggedCache extends TaggedCache
      */
     protected function pushKeys($namespace, $key, $reference)
     {
-        // XXX Commented by Matteo
-        // $fullKey = $this->store->getPrefix().sha1($namespace).':'.$key;
-        // XXX Added by Matteo
-        $fullKey = $this->store->getPrefix().'{'.sha1($namespace).'}:'.$key;
+        $fullKey = $this->store->getPrefix().sha1($namespace).':'.$key;
 
         foreach (explode('|', $namespace) as $segment) {
             $this->store->connection()->sadd($this->referenceKey($segment, $reference), $fullKey);
@@ -197,16 +194,5 @@ class RedisTaggedCache extends TaggedCache
     protected function referenceKey($segment, $suffix)
     {
         return $this->store->getPrefix().$segment.':'.$suffix;
-    }
-    
-    // XXX Added by Matteo
-    /**
-     *
-     * {@inheritdoc}
-     * @see \Illuminate\Cache\TaggedCache::taggedItemKey()
-     */
-    public function taggedItemKey($key)
-    {
-        return '{'.sha1($this->tags->getNamespace()).'}:'.$key;
     }
 }
