@@ -530,7 +530,7 @@ class RoutingUrlGeneratorTest extends TestCase
         }]);
         $routes->add($route);
 
-        $this->assertSame('http://www.foo.com:8080/foo/{one}?test=123', $url->route('foo', $parameters));
+        $this->assertSame('http://www.foo.com:8080/foo/%7Bone%7D?test=123', $url->route('foo', $parameters));
     }
 
     public function testForceRootUrl()
